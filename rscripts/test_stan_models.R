@@ -53,7 +53,8 @@ model_fit_unb <- stan(file = "stan_models/naive_bayes_unsupervised.stan", data =
 
 
 
-# To do, sum up sufficient statistics instead of iterating over words
-# Trim vocabulary
+# Potential improvements:
+# 1) Sum up sufficient statistics instead of iterating over words
+# 2) Trim vocabulary to simplify
 
 
