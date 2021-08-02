@@ -26,7 +26,7 @@ data_list = []
 max_folders = 0
 c = 0
 
-riksdagen_path = '/home/robinsaberi/Git_Repos/riksdagen-corpus/corpus'
+riksdagen_path = '../riksdagen-corpus/corpus'
 
 # Traverse corpus folder and subdirectories
 #for root, dirs, files in os.walk("corpus/"):
