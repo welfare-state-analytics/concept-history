@@ -6,7 +6,7 @@ from scipy.special import loggamma
 from progressbar import progressbar
 
 # Location of test_data
-path = '/home/robinsaberi/Git_Repos/concept-history/tests/test_data'
+path = 'tests/test_data'
 files = ['test_stan_data.json','test_theta.json','test_phi.json']
 
 # Load files
