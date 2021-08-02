@@ -4,7 +4,7 @@ from collections import deque
 import os,json
 import re
 from progressbar import progressbar
-from utils import paragraph_iterator
+from pyparlaclarin.read import paragraph_iterator
 from lxml import etree
 from itertools import chain
 
