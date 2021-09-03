@@ -4,6 +4,7 @@ import os,json
 from collections import Counter
 from scipy.special import loggamma
 from progressbar import progressbar
+from matplotlib.pyplot import plot, draw, show
 
 # Location of test_data
 path = 'tests/test_data'
@@ -44,7 +45,13 @@ theta = Nd / Nd.sum()
 phi = Nk / Nk.sum(axis=1)[:, np.newaxis]
 
 # Run algo
-epochs = 50
+epochs = 1000
+
+def logLik(theta,phi,Nd,Nk,alpha,beta):
+    return np.multiply((Nd + alpha - 1), np.log(theta)).sum() + \
+           np.multiply((Nk + beta - 1), np.log(phi)).sum()
+
+ll = []
 
 for epoch in progressbar(range(epochs)):
     for doc in range(len(df)):
@@ -76,6 +83,12 @@ for epoch in progressbar(range(epochs)):
         dir_beta = [np.random.dirichlet(row + beta) for row in Nk]
         phi = np.array([i for i in dir_beta])
         theta = np.array(np.random.dirichlet(Nd + alpha))
+    ll.append(logLik(theta,phi,Nd,Nk,alpha,beta))
+
+plot(ll)
+draw()
+show()
+
 
 # To do:
 # Add evaluation metric (that is comparable across different models)
