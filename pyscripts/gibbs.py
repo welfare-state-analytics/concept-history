@@ -1,141 +1,154 @@
-import enum
 import numpy as np
 import pandas as pd
-import os,json
+import json
 from collections import Counter
-from progressbar import progressbar
-from itertools import dropwhile
+import progressbar
 from scipy.special import logsumexp
+import matplotlib.pyplot as plt
+
+# Create a package...
+
+# Make output vocab json compatible
+class NpEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+
+# Removes rare words from documents
+def rareWords(doc, w, thresh=5):
+    c = Counter(w)
+    rare_words = set([key for key, value in c.items() if value < thresh])
+
+    idx= []
+    for i in range(len(w)):
+        if w[i] not in rare_words:
+            idx.append(i)
+
+    w = [w[i] for i in idx]
+    doc = [doc[i] for i in idx]
+
+    return(doc, w)
+
+def gibbsInit(df, M, V, K, alpha, beta):
+    # Initialize z uniformly at random
+    df["z"] = np.random.choice(K, M)
+
+    # Create sufficient statistic matrices
+    Nd = np.zeros(K, dtype = 'int')
+    Nk = np.zeros((K, V), dtype = 'int')
+
+    # Compute counts
+    for doc in range(len(df)):
+        d,w,z = df.loc[doc]
+        Nd[z] += 1
+        np.add.at(Nk[z], w, 1)
+
+    # Initiate theta,phi as regularized sample estimates
+    theta = (Nd + alpha) / (Nd + alpha).sum()
+    phi = (Nk + beta) / (Nk + beta).sum(axis=1)[:, np.newaxis]
+
+    return(theta, phi, Nd, Nk)
+
+def gibbsStep(w,z,theta,phi,Nd,Nk,alpha,beta):
+    # Decrement counts
+    np.subtract.at(Nk[z], w, 1)
+    Nd[z] -= 1
+
+    # Sample z
+    logprobs = np.log(theta) + np.log(np.take(phi, w, axis=1)).sum(axis=1)
+    z = np.random.choice(K, p = np.exp(logprobs - logsumexp(logprobs)))
+
+    # Increment counts
+    np.add.at(Nk[z], w, 1)
+    Nd[z] += 1
+
+    # Sample new phi and theta
+    dir_beta = [np.random.dirichlet(row + beta[i]) for i,row in enumerate(Nk)]
+    phi = np.array([i for i in dir_beta])
+    theta = np.array(np.random.dirichlet(Nd + alpha))
+
+    return (theta, phi, Nd, Nk, z)
+
+def logDensity(theta,phi,Nd,Nk,alpha,beta):
+    return np.multiply((Nd + alpha - 1), np.log(theta)).sum() + \
+           np.multiply((Nk + beta - 1), np.log(phi)).sum()
+
+### Load test data ###
+in_path = 'tests/test_data'
+out_path = 'test_results'
 
 
+with open('/'.join([in_path, 'test_stan_data.json'])) as f:
+    data = json.load(f)
 
+_,_,_,_,_,_,_,w,doc = list(data.values())
 
-# Location of test_data
-#path = '/home/robinsaberi/Git_Repos/concept-history/tests/test_data'
-#files = ['test_stan_data.json','test_theta.json','test_phi.json']
-#
-# Load files
-#lst = []
-#for i in range(len(files)):
-#    with open(path+'/'+files[i]) as f:
-#        lst.append(json.load(f))
-#
-#data,theta_true,phi_true = lst
-#theta_true = np.array((1,2,3,4)) / (1+2+3+4) # Bug in git data, enter manually until fixed
-#phi_true = np.array(phi_true)
-#K,V,M,N,alpha,beta,z_true,w,doc = list(data.values())
-#
-#z_true = [x-1 for x in z_true] # Index from 0
+# Index from 0
+if min(doc) == 1:
+    doc = [x-1 for x in doc]
+if min(w) == 1:
+    w = [x-1 for x in w]
 
-# Riksdagen data
-path = '/home/robinsaberi/Git_Repos/concept-history/pyscripts/test_context_window_data.json'
-with open(path) as f:
-    data = json.load(f)# .values()
-    w,file,n = data.values()
+### Data preprocessing ###
+doc, w = rareWords(doc, w, thresh=5)
 
-# Remove rare words
-c = Counter(x for xs in w for x in set(xs))
-rare_words = set([key for key, value in c.items() if value < 1000000000000])
+# Create vocab
+vocab = set(w)
+vocab = {token:i+1 for i, token in enumerate(vocab)}
 
-for lst in w:
-    for i, word in enumerate(lst):
-        if word in rare_words:
-            del lst[i]
-    print(lst)
-    if len(lst) == 0:
-        print(lst)
-        print('oops')
-        
-# Check that no document is completely empty
+# Create df
+df = pd.DataFrame(np.array((doc,w)).T)
+df.columns = ["doc", "w"]
+df = df.groupby('doc')['w'].apply(list).reset_index()
 
-#K = 10
-#alpha,beta = 0.5,0.5
-#beta = 0.01
-#
-## Create df
-#df = pd.DataFrame(np.array((doc,w)).T)
-#df.columns = ["doc", "w"]
-#
-#wcount = Counter(w)
-#print(len(wcount))
-#for key, count in dropwhile(lambda key_count: key_count[1] >= 5, wcount.most_common()):
-#    del wcount[key]
-#print(len(wcount))
-#
-#print(2229 / 11678)
-#
-#df = df.groupby('w').filter(lambda x : (x['w'].count()>=5).any()) # somethings wrong ...
-#
-#
-#df = df.groupby('doc')['w'].apply(list).reset_index()
+# Hyperparameters, etc.
+K = 4
+M = len(set(doc))
+N = len(w)
+V = len(vocab)
+alpha = np.array([0.5]*K)
+beta = np.array([[0.5]*V]*K)
 
+# Run settings
+burn_in = 200
+epochs = 1000
+sample_intervals = 50
 
+# Output objects
+theta_out = np.zeros(K, dtype = 'float')
+phi_out = np.zeros((K, V), dtype = 'float')
+z_out = np.zeros((len(df),int((epochs-burn_in)/sample_intervals)))
 
-# Test data
-#df["z"] = np.random.choice(K, M) - 1
-#df["n"] = [int(N/M)]*M
+# Initialize and run
+theta, phi, Nd, Nk = gibbsInit(df, M, V, K, alpha, beta)
+logdensity = []
+t = 0
 
-# Riksdagen data
-#df["z"] = np.random.choice(K, M) - 1
-#df["n"] = n
-#
-## Create sufficient statistic matrices
-#Nd = np.zeros(K, dtype = 'int')
-#Nk = np.zeros((K,V), dtype = 'int')
-#
-#for doc in range(len(df)):
-#    d,w,z,n = df.loc[doc]
-#    Nd[z] += 1
-#    np.add.at(Nk[z], w, 1)
-#
-## Initiate theta,phi as unbiased sample estimates
-#theta = (Nd + alpha) / (Nd + alpha).sum()
-#phi = (Nk + beta) / (Nk + beta).sum(axis=1)[:, np.newaxis]
-#
-## Run algo
-#epochs = 50
-#
-#for epoch in progressbar(range(epochs)):
-#    for doc in range(len(df)):
-#        d,w,z,n = df.loc[doc]
-#
-#        # Get word counts for document
-#        w_count = Counter(w)
-#        counts = list(w_count.values())
-#        keys = list(w_count.keys())
-#
-#        # Decrement counts
-#        np.subtract.at(Nk[z], keys, counts)
-#        Nd[z] -= 1
-#
-#        # Sample sense
-#        log_probs = np.log(theta.copy())
-#        
-#
-#        
-#        for i in w:
-#            log_probs += np.log(phi[:,i])
-#        print(doc)
-#        print(np.min(phi))
-#
-#                
-#        z = np.random.choice(K, p = np.exp(log_probs - logsumexp(log_probs))) # make them sample from logits
-#        
-#        df.loc[d,"z"] = z
-#
-#        # Increment counts
-#        np.add.at(Nk[z], keys, counts)
-#        Nd[z] += 1
-#
-#        # Sample new phi and theta
-#        dir_beta = [np.random.dirichlet(row + beta) for row in Nk]
-#        phi = np.array([i for i in dir_beta])
-#        theta = np.array(np.random.dirichlet(Nd + alpha))
-#
-## To do:
-## Add evaluation metric (that is comparable across different models)
-## Also make code a bit safer/general
-## Algo converges almost immediately and is then stuck, seems to be a case of multimodality and large influence from taking many phi products
-#
-#
-#
+for epoch in progressbar.progressbar(range(epochs)):
+    for m in range(M):
+        w,z = df.loc[m,["w","z"]]
+        theta, phi, Nd, Nk, df.loc[m,"z"] = gibbsStep(w,z,theta,phi,Nd,Nk,alpha,beta)
+    logdensity.append(logDensity(theta,phi,Nd,Nk,alpha,beta))
+
+    # Save samples in given intervals
+    if epoch >= burn_in and epoch % sample_intervals == 0:
+        z_out[:,t] = df["z"]
+        t += 1
+        phi_out = (t-1)/t * phi_out + 1/t * phi
+        theta_out = (t-1)/t * theta_out + 1/t * theta
+
+# Save phi, theta, alogdensity sampled z
+np.save(f'{out_path}/phi.npy', phi_out)
+np.save(f'{out_path}/theta.npy', theta_out)
+np.save(f'{out_path}/z.npy', z_out)
+np.save(f'{out_path}/logdensity.npy', np.array(logdensity))
+
+# Save vocab
+with open(f"{out_path}/vocab.json", "w") as outfile: 
+        json.dump(vocab, outfile, cls=NpEncoder)
+
+plt.plot(logdensity)
+plt.savefig(f'{out_path}/logdensity.png')
+
