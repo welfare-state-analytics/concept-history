@@ -1,101 +1,115 @@
+"""
+Script for creating context window data.
+To do: Currently repeats the process for each window size.
+       Instead just do it for the largest window and extract smaller windows from it.
+"""
 import numpy as np
-import os,json
+import os, json
 import re
-from numpy.core.defchararray import index
 import progressbar
 from pyparlaclarin.read import speeches_with_name
 from lxml import etree
 
-# Target words
-target_f = ['Information', 'information', 'informations', 'informationen', 'informationens', 'informationer', 'informationers', 'informationerna', 'informationernas',\
-'Upplysning', 'upplysningar', 'upplysningars', 'upplysningarna', 'upplysningarnas', 'upplysning', 'upplysnings', 'upplysningen', 'upplysningens'\
-'Propaganda', 'propaganda', 'propagandas', 'propagandan', 'propagandans']
+def count_files(path, extension='.xml'):
+    """
+    Counts number of files to be opened. Used for updating the progressbar.
+    """
+    n_files = 0
+    for subdir, dirs, files in os.walk(path):
+        for file in files:
+            if file.endswith(extension):
+                n_files += 1
+    return n_files
+
+def corpus_iterator(path):
+    """
+    Generator for paths to xml files in riksdagen corpus
+    """
+    for subdir, dirs, files in os.walk(path):
+        for file in files:
+            if file.endswith('.xml'):
+                yield '/'.join([subdir, file])
+
+def speech_processor(speech):
+    """
+    Creates list of lowercase words with special characters removed from speeech.
+    """
+    speech = re.sub(r'[^A-Za-zÀ-ÿ ]+', '', speech)
+    speech = speech.lower()
+    speech = speech.split()
+    return speech
+
+def create_context(speech, i, window_size):
+    lb = max(0, i-window_size)
+    ub = min(len(speech), i+window_size + 1)
+    context = speech[lb:ub]
+    return context
+
+def create_contexts(crp, target, window_size, n_files):
+    """
+    : param crp: generator object for xml filepaths
+    : param target: list of target words to create windows around
+    : param window_size: number of word tokens on each side of target word
+    : param n_files: 
+    """
+    keys = ["w", "doc", "target", "file_dir"]
+    data = {key: [] for key in keys}
+    n_pseudodocs, c = 0, 0
+
+    with progressbar.ProgressBar(max_value=n_files) as bar:
+        for file_path in crp:
+            root = etree.parse(file_path, parser).getroot()
+            file_dir = '/'.join(file_path.split('/')[3:5])
+
+            for speech, idx in speeches_with_name(root, return_ids=True):
+                speech = speech_processor(speech)
+
+                if set(speech).intersection(target):
+                    for i, word in enumerate(speech):
+                        if word in target:
+                            
+                            # Create context windows and store additional information
+                            context = create_context(speech, i, window_size)
+                            Nm = len(context)
+                            data["w"].extend(context)
+                            data["doc"].extend([n_pseudodocs]*Nm)
+                            data["target"].extend([word]*Nm)
+                            data["file_dir"].extend([file_dir]*Nm)
+
+                            n_pseudodocs += 1 # Increment doc count
+            bar.update(c)
+            c += 1
+            
+    return data
+
+target_f = ['information', 'informations', 'informationen', 'informationens', 'informationer', 'informationers', 'informationerna', 'informationernas',\
+            'upplysningar', 'upplysningars', 'upplysningarna', 'upplysningarnas', 'upplysning', 'upplysnings', 'upplysningen', 'upplysningens'\
+            'propaganda', 'propagandas', 'propagandan', 'propagandans']
 
 target_j = ['medium', 'media', 'medial', 'mediala', 'medialt', 'medias', 'medier', 'mediers', 'mediernas', 'mediet', 'mediets', 'massmedium', \
-          'massmedia', 'massmedial', 'massmediala', 'massmedialt', 'massmedias', 'massmedier', 'massmediernas', 'massmediet', 'massmediets']
+            'massmedia', 'massmedial', 'massmediala', 'massmedialt', 'massmedias', 'massmedier', 'massmediernas', 'massmediet', 'massmediets']
 
-targets = [target_f, target_j]
+window_sizes = [5, 10, 50, 100]
+projects = ['f', 'j']
 
-# Context window size (on each side of target word)
-windows = [5,10,50,100]
-riksdagen_path = 'corpus'
+in_path = '../riksdagen-corpus/corpus'
+n_files = count_files(in_path)
+parser = etree.XMLParser(remove_blank_text=True)
 
-# Extract number of folders (for progressbar)
-n_files = 0
-for path, subdirs, files in os.walk(riksdagen_path):
-    for folder in subdirs:
-        for file in folder:
-            n_files += 1
+for project in projects:
+    target = target_f if project == 'f' else target_j
 
-# Make objects json compatible
-class NpEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.integer):
-            return int(obj)
-        elif isinstance(obj, np.floating):
-            return float(obj)
+    for window_size in window_sizes:
+        out_path = 'data/context_windows'
+        # Create output directories
+        try:
+            os.mkdir(out_path)
+        except:
+            pass
+        crp = corpus_iterator(in_path)
+        data = create_contexts(crp, target, window_size, n_files)
 
-for target in targets:
-    doc_folder = {} # dict for document-file mappings
-    project = 'f'
-    
-    # For each window size
-    for window in windows:
-        with progressbar.ProgressBar(max_value=n_files) as bar: # Bar is broken ¯\_(ツ)_/¯
-    
-            # Initialize
-            keys = ["w", "doc"]
-            data = {key: [] for key in keys}
-            n_pseudodocs, c = 0,0
-    
-            # Traverse corpus subdirs and files
-            for root, dirs, files in os.walk(riksdagen_path):
-                path = root.split(os.sep)
-                folder = os.path.basename(root)
-                if folder.isnumeric():
-                    for file in files:
-                        if file.endswith('.xml'):
-                            file_path = '/'.join([riksdagen_path,folder,file])
-                            parser = etree.XMLParser(remove_blank_text=True)
-                            root = etree.parse(file_path, parser).getroot()
-        
-                            # Iterate over speeches within xml file
-                            for speech,idx in speeches_with_name(root, return_ids=True):
-        
-                                # Process string
-                                speech = re.sub(r'[^A-Za-zÀ-ÿ ]+', '', speech) # Remove special characters
-                                speech = speech.lower()
-                                par = speech.split()
-
-                                # Find target words in paragraph
-                                if set(par).intersection(target):
-                                    for i,word in enumerate(par):
-                                        if word in target:
-                                            
-                                            # Create context window and store w,doc
-                                            lb = max(0, i-window)
-                                            ub = min(len(par), i+window + 1)
-                                            ctx = par[lb:ub]
-                                            data["w"].extend(ctx)
-                                            data["doc"].extend([n_pseudodocs]*len(ctx))
-        
-                                            # Store folder/file only for 1 window
-                                            if window == min(windows):
-                                                folder_key = '/'.join([folder,file])
-                                                if folder_key not in doc_folder:
-                                                    doc_folder[folder_key] = []
-        
-                                                doc_folder[folder_key].append('_'.join([str(n_pseudodocs),idx]))
-                                            
-                                            n_pseudodocs += 1 # Increment doc count
-        
-                            bar.update(c)
-                
-        with open(f"ctx_window_data/ctx_window_{window}_{project}.json", "w") as outfile: 
-            json.dump(data, outfile, cls=NpEncoder)
-    
-    with open(f"ctx_window_data/doc_folder_mapping_{project}.json", "w") as outfile: 
-            json.dump(doc_folder, outfile, cls=NpEncoder)
-    
-    project = 'j'
-    
+        file_name = f'{project}_window_{window_size}.json'
+        with open('/'.join([out_path, file_name]), "w") as outfile:
+            json.dump(data, outfile)
+        print(f'Window size {window_size} finished for project {project}.')
