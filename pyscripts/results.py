@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import os, json
 from pygibbs import utils
 import matplotlib.pyplot as plt
@@ -13,10 +12,11 @@ def cleanYear(year):
     year = ''.join(year[0:2] + year[4:6])
     return int(year)
 
-folders = sorted(os.listdir('results'))
+in_path = 'results/first-run'
+folders = sorted(os.listdir(in_path))
 
 for folder in folders:
-    results = os.path.join('results', folder)
+    results = os.path.join(in_path, folder)
 
     Nd = np.load(os.path.join(results, 'Nd.npy'))
     Nk = np.load(os.path.join(results, 'Nk.npy'))
@@ -41,6 +41,7 @@ for folder in folders:
     
     doc = data["doc"]
     years = list(map(lambda x: cleanYear(x.split('/')[0]), data["file_dir"]))
+    target = list(map(lambda x: x[:4], data["target"])) # Lemmatize
 
     M, V, K = len(z), np.shape(Nk)[1], len(Nd)
 
@@ -49,16 +50,11 @@ for folder in folders:
 
     fig, ax = utils.senses_over_time(years, doc, z, K)
     plt.savefig(os.path.join(results, 'senses_over_time.png'), dpi=300, bbox_inches='tight')
+    plt.close()
 
-    # Plot wordfreqs differently as there are different numbers of target words
-    if folder.startswith('f'):
-        target = list(map(lambda x: x[:4], data["target"]))
-        fig, ax = utils.word_freq_over_time(years, target)
-        plt.savefig(os.path.join(results, 'word_prop_over_time.png'), dpi=300, bbox_inches='tight')
-        plt.close()
-
-    elif folder.startswith('j'):
-        target = ['media']*len(data["target"])
+    fig, ax = utils.word_freq_over_time(years, target, relative=True)
+    plt.savefig(os.path.join(results, 'word_prop_over_time.png'), dpi=300, bbox_inches='tight')
+    plt.close()
 
     fig, ax = utils.word_freq_over_time(years, target, relative=False)
     plt.savefig(os.path.join(results, 'word_freq_over_time.png'), dpi=300, bbox_inches='tight')
