@@ -57,6 +57,6 @@ sample_intervals = 5
 theta, phi, Nd, Nk, z, logdensity, posterior = gibbs.gibbsSampler(df, M, V, K, alpha, beta, epochs, burn_in, sample_intervals)
 
 # Save and push results
-posterior_path = os.path.join(results_path, 'posterior-test.npy')
+posterior_path = os.path.join(results_path, 'posterior.npy')
 np.save(posterior_path, posterior)
-utils.git_auto_push(posterior_path)
+utils.git_auto_push(posterior_path, 'added posterior from rebooted model')

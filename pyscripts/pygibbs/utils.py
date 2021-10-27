@@ -191,12 +191,12 @@ def z_sorter(z, phi, Nk, K):
     Nk = Nk[z_sorted]
     return (z, phi, Nk)
 
-def git_auto_push(path):
+def git_auto_push(path, message):
     """
     Used to automatically upload results inbetween training of models.
     """
     subprocess.call('git config --global credential.helper store', shell=True)
     subprocess.call('git pull', shell=True)
     subprocess.call(f'git add {path}', shell=True)
-    subprocess.call('git commit -m "test auto push"', shell=True)
+    subprocess.call(f'git commit -m "{message}"', shell=True)
     subprocess.call('git push', shell=True)
