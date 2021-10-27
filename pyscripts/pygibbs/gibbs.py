@@ -1,7 +1,6 @@
 import numpy as np
 import progressbar
 from scipy.special import logsumexp
-import matplotlib.pyplot as plt
 
 def gibbsInit(df, V, K):
     """
@@ -67,11 +66,14 @@ def logDensity(logtheta, logphi, Nd, Nk, alpha, beta):
     return np.multiply((Nd + alpha - 1), logtheta).sum() + \
            np.multiply((Nk + beta - 1), logphi).sum()
 
-def gibbsSampler(df, M, V, K, alpha, beta, epochs, burn_in, sample_intervals):
-
+def gibbsSampler(df, M, V, K, alpha, beta, epochs, burn_in, sample_intervals, sample_post=True):
     """
     Main Gibbs sampling function
     """
+    posterior = False
+    if sample_post == True:
+        posterior = np.zeros((M, K), dtype=int)
+        row_indices = list(range(M))
 
     Nd, Nk = gibbsInit(df, V, K)
 
@@ -80,8 +82,6 @@ def gibbsSampler(df, M, V, K, alpha, beta, epochs, burn_in, sample_intervals):
     phi_out = np.zeros((K, V), dtype = 'float')
 
     logdensity = []
-    t = 0
-
     for e in progressbar.progressbar(range(epochs)):
         logtheta = logtheta_sampler(Nd, alpha)
         logphi = logphi_sampler(Nk, beta)
@@ -95,9 +95,12 @@ def gibbsSampler(df, M, V, K, alpha, beta, epochs, burn_in, sample_intervals):
             phi_out += np.exp(logphi)
             theta_out += np.exp(logtheta)
 
+            if sample_post == True:
+                np.add.at(posterior, tuple([row_indices, df["z"]]), 1)
+
     n_samples = (epochs-burn_in)//sample_intervals
 
-    return (theta_out/n_samples, phi_out/n_samples, Nd, Nk, df["z"], logdensity)
+    return (theta_out/n_samples, phi_out/n_samples, Nd, Nk, df["z"], logdensity, posterior)
 
 
 

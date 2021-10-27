@@ -4,6 +4,7 @@ from collections import Counter
 from bidict import bidict
 from sklearn.preprocessing import Normalizer
 import matplotlib.pyplot as plt
+import subprocess
 
 def rareWords(doc, w, thresh=5):
     """
@@ -189,3 +190,13 @@ def z_sorter(z, phi, Nk, K):
     phi = phi[z_sorted]
     Nk = Nk[z_sorted]
     return (z, phi, Nk)
+
+def git_auto_push(path):
+    """
+    Used to automatically upload results inbetween training of models.
+    """
+    subprocess.call('git config --global credential.helper store', shell=True)
+    subprocess.call('git pull', shell=True)
+    subprocess.call(f'git add {path}', shell=True)
+    subprocess.call('git commit -m "test auto push"', shell=True)
+    subprocess.call('git push', shell=True)
