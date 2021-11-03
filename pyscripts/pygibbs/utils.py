@@ -62,7 +62,7 @@ def distinctWords(Nk, vocab, K, n=20, beta=0):
 
     return distinctwords
 
-def topWords(phi, vocab, K, stopwords=False, n=20):
+def topWords_old(phi, vocab, K, stopwords=False, n=20):
     """
     Computes top n p(w|K=k)
     :param stopwords: list of stopwords   
@@ -76,6 +76,25 @@ def topWords(phi, vocab, K, stopwords=False, n=20):
     for k in range(K):
         indices = (-phi[k]).argsort()[:n]
         word_list.append([vocab_rev.get(key) for key in indices])
+    topwords = pd.DataFrame(np.array(word_list).T)
+    topwords.columns = list(range(K))
+
+    return topwords
+
+def topWords(phi, vocab, K, stopwords=False, n=20):
+    """
+    Computes top n p(w|K=k)
+    :param stopwords: list of stopwords   
+    """
+    if stopwords != False:
+        idx = [i for i in [vocab.get(word) for word in stopwords] if i is not None]
+        vocab = {i:word for i,word in enumerate([word for word in vocab if word not in stopwords])}
+        phi = np.delete(phi, idx, axis=1)
+
+    word_list = []
+    for k in range(K):
+        indices = (-phi[k]).argsort()[:n]
+        word_list.append([vocab.get(key) for key in indices])
     topwords = pd.DataFrame(np.array(word_list).T)
     topwords.columns = list(range(K))
 
