@@ -44,10 +44,6 @@ def main(hyperparameters, in_path, out_path):
         plt.close()
         print(f'{out.split("/")[-1]} finished.')
 
-        n_samples = (epochs-burn_in)//sample_intervals
-        theta // n_samples
-        phi // n_samples
-
 # Specify paths and data files
 in_path = 'data/context_windows'
 out_path = 'results/second-run'
