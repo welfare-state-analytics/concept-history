@@ -7,7 +7,6 @@ import numpy as np
 import os, json
 import re
 import progressbar
-from pyparlaclarin.read import speeches_with_name
 from lxml import etree
 
 def count_files(path, extension='.xml'):
@@ -30,6 +29,28 @@ def corpus_iterator(path):
             if file.endswith('.xml'):
                 yield '/'.join([subdir, file])
 
+def speech_iterator(root):
+    """
+    Convert Parla-Clarin XML to an iterator of of concatenated speeches and speaker ids.
+    Speech segments are concatenated unless a new speaker appears (ignoring any notes).
+
+    Args:
+        root: Parla-Clarin document root, as an lxml tree root.
+    """
+    us = root.findall('.//{http://www.tei-c.org/ns/1.0}u')
+    if len(us) == 0: return None
+    idx_old = us[0].attrib.get("who", "")
+    speech = []
+
+    for u in us:
+        for text in u.itertext():
+            idx = u.attrib.get("who", "")
+            if idx != idx_old:
+                yield([' '.join(speech), idx])
+                speech = []
+            speech.extend(text.split())
+            idx_old = idx
+
 def speech_processor(speech):
     """
     Creates list of lowercase words with special characters removed from speeech.
@@ -45,71 +66,63 @@ def create_context(speech, i, window_size):
     context = speech[lb:ub]
     return context
 
-def create_contexts(crp, target, window_size, n_files):
+def create_contexts(crp, target, window_size, n_files, parser):
     """
     : param crp: generator object for xml filepaths
     : param target: list of target words to create windows around
     : param window_size: number of word tokens on each side of target word
     : param n_files: 
     """
-    keys = ["w", "doc", "target", "file_dir"]
+    keys = ["w", "doc", "target", "file_path", "id"]
     data = {key: [] for key in keys}
     n_pseudodocs, c = 0, 0
 
     with progressbar.ProgressBar(max_value=n_files) as bar:
         for file_path in crp:
             root = etree.parse(file_path, parser).getroot()
-            file_dir = '/'.join(file_path.split('/')[3:5])
-
-            for speech, idx in speeches_with_name(root, return_ids=True):
-                speech = speech_processor(speech)
-
-                if set(speech).intersection(target):
-                    for i, word in enumerate(speech):
-                        if word in target:
-                            
-                            # Create context windows and store additional information
-                            context = create_context(speech, i, window_size)
-                            Nm = len(context)
-                            data["w"].extend(context)
-                            data["doc"].extend([n_pseudodocs]*Nm)
-                            data["target"].extend([word]*Nm)
-                            data["file_dir"].extend([file_dir]*Nm)
-
-                            n_pseudodocs += 1 # Increment doc count
-            bar.update(c)
+            speeches = speech_iterator(root)
+            if speeches != None:
+                for speech, idx in speeches:
+                    speech = speech_processor(speech)
+                    if set(speech).intersection(target):
+                        for i, word in enumerate(speech):
+                            if word in target:
+                                context = create_context(speech, i, window_size)
+                                Nm = len(context)
+                                data["w"].extend(context)
+                                data["doc"].extend([n_pseudodocs]*Nm)
+                                data["target"].extend([word]*Nm)
+                                data["file_path"].extend([file_path]*Nm)
+                                data["id"].extend([idx]*Nm)
+                                n_pseudodocs += 1
             c += 1
+            bar.update(c)
             
     return data
 
-target_f = ['information', 'informations', 'informationen', 'informationens', 'informationer', 'informationers', 'informationerna', 'informationernas',\
-            'upplysningar', 'upplysningars', 'upplysningarna', 'upplysningarnas', 'upplysning', 'upplysnings', 'upplysningen', 'upplysningens'\
-            'propaganda', 'propagandas', 'propagandan', 'propagandans']
-
-target_j = ['medium', 'media', 'medial', 'mediala', 'medialt', 'medias', 'medier', 'mediers', 'mediernas', 'mediet', 'mediets', 'massmedium', \
-            'massmedia', 'massmedial', 'massmediala', 'massmedialt', 'massmedias', 'massmedier', 'massmediernas', 'massmediet', 'massmediets']
-
-window_sizes = [5, 10, 50, 100]
-projects = ['f', 'j']
-
-in_path = '../riksdagen-corpus/corpus'
-n_files = count_files(in_path)
-parser = etree.XMLParser(remove_blank_text=True)
-
-for project in projects:
-    target = target_f if project == 'f' else target_j
+def main(window_sizes, projects, corpus_path, targets_path, out_path):
+    with open(targets_path) as j:
+        targets = json.load(j)
+    parser = etree.XMLParser(remove_blank_text=True)
+    n_files = count_files(corpus_path)
 
     for window_size in window_sizes:
-        out_path = 'data/context_windows'
-        # Create output directories
-        try:
-            os.mkdir(out_path)
-        except:
-            pass
-        crp = corpus_iterator(in_path)
-        data = create_contexts(crp, target, window_size, n_files)
+        for project in projects:
+            target = targets['target_' + project]
+            crp = corpus_iterator(corpus_path)
+            data = create_contexts(crp, target, window_size, n_files, parser)
+            file_name = f'{project}_window_{window_size}.json'
+            with open('/'.join([out_path, file_name]), "w") as outfile:
+                json.dump(data, outfile)
+            print(f'Window size {window_size} finished for project {project}.')
 
-        file_name = f'{project}_window_{window_size}.json'
-        with open('/'.join([out_path, file_name]), "w") as outfile:
-            json.dump(data, outfile)
-        print(f'Window size {window_size} finished for project {project}.')
+# Args
+window_sizes = [5, 10, 20, 50]
+projects = ['f', 'j']
+corpus_path = '../riksdagen-corpus/corpus'
+out_path = 'data/context_windows'
+targets_path = 'data/target-words.json'
+
+if __name__ == "__main__":
+    main(window_sizes, projects, corpus_path, targets_path, out_path)
+
