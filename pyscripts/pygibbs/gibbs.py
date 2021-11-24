@@ -76,29 +76,23 @@ def gibbsSampler(df, M, V, K, alpha, beta, epochs, burn_in, sample_intervals, sa
         row_indices = list(range(M))
 
     Nd, Nk = gibbsInit(df, V, K)
-
-    # Output objects
     theta_out = np.zeros(K, dtype = 'float')
     phi_out = np.zeros((K, V), dtype = 'float')
-
+    n_samples = 0
     logdensity = []
     for e in progressbar.progressbar(range(epochs)):
         logtheta = logtheta_sampler(Nd, alpha)
         logphi = logphi_sampler(Nk, beta)
-
         Nd, Nk, df["z"] = z_sampler(df,logtheta,logphi,Nd,Nk,M,K)
-
         logdensity.append(logDensity(logtheta,logphi,Nd,Nk,alpha,beta))
 
         # Save samples in given intervals
-        if e >= burn_in and e % sample_intervals == 0:
-            phi_out += np.exp(logphi)
+        if e > burn_in and (e+1) % sample_intervals == 0:
             theta_out += np.exp(logtheta)
-
+            phi_out += np.exp(logphi)
+            n_samples += 1
             if sample_post == True:
                 np.add.at(posterior, tuple([row_indices, df["z"]]), 1)
-
-    n_samples = (epochs-burn_in)//sample_intervals
 
     return (theta_out/n_samples, phi_out/n_samples, Nd, Nk, df["z"], logdensity, posterior)
 
