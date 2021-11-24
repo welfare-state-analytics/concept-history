@@ -87,7 +87,7 @@ def gibbsSampler(df, M, V, K, alpha, beta, epochs, burn_in, sample_intervals, sa
         logdensity.append(logDensity(logtheta,logphi,Nd,Nk,alpha,beta))
 
         # Save samples in given intervals
-        if e > burn_in and (e+1) % sample_intervals == 0:
+        if e >= burn_in and (e+1) % sample_intervals == 0:
             theta_out += np.exp(logtheta)
             phi_out += np.exp(logphi)
             n_samples += 1
