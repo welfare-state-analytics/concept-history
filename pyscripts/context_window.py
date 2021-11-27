@@ -73,7 +73,7 @@ def create_contexts(crp, target, window_size, n_files, parser):
     : param window_size: number of word tokens on each side of target word
     : param n_files: 
     """
-    keys = ["w", "doc", "target", "file_path", "id"]
+    keys = ["w", "doc", "target", "file_path", "id", "pos"]
     data = {key: [] for key in keys}
     n_pseudodocs, c = 0, 0
 
@@ -93,14 +93,22 @@ def create_contexts(crp, target, window_size, n_files, parser):
                                 data["doc"].extend([n_pseudodocs]*Nm)
                                 data["target"].extend([word]*Nm)
                                 data["file_path"].extend([file_path]*Nm)
-                                data["id"].extend([idx]*Nm)
+                                data["id"].append(idx)
+                                data["pos"].append(i)
                                 n_pseudodocs += 1
             c += 1
             bar.update(c)
             
     return data
 
-def main(window_sizes, projects, corpus_path, targets_path, out_path):
+def main():
+    # Args
+    window_sizes = [5, 10, 20, 50]
+    projects = ['f', 'j']
+    corpus_path = '../riksdagen-corpus/corpus'
+    targets_path = 'data/target-words.json'
+    out_path = 'data/context_windows'
+
     with open(targets_path) as j:
         targets = json.load(j)
     parser = etree.XMLParser(remove_blank_text=True)
@@ -116,13 +124,6 @@ def main(window_sizes, projects, corpus_path, targets_path, out_path):
                 json.dump(data, outfile)
             print(f'Window size {window_size} finished for project {project}.')
 
-# Args
-window_sizes = [5, 10, 20, 50]
-projects = ['f', 'j']
-corpus_path = '../riksdagen-corpus/corpus'
-out_path = 'data/context_windows'
-targets_path = 'data/target-words.json'
-
 if __name__ == "__main__":
-    main(window_sizes, projects, corpus_path, targets_path, out_path)
+    main()
 

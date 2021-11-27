@@ -12,57 +12,66 @@ def cleanYear(year):
     year = ''.join(year[0:2] + year[4:6])
     return int(year)
 
-in_path = 'results/first-run'
-folders = sorted(os.listdir(in_path))
+def main(folder):
+    in_path = os.path.join(folder, 'model')
+    Nd = np.load(os.path.join(in_path, 'Nd.npy'))
+    Nk = np.load(os.path.join(in_path, 'Nk.npy'))
+    theta = np.load(os.path.join(in_path, 'theta.npy'))
+    phi = np.load(os.path.join(in_path, 'phi.npy'))
+    z = np.load(os.path.join(in_path, 'z.npy'))
+    logdensity = np.load(os.path.join(in_path, 'logdensity.npy'))
+    logposterior = np.load(os.path.join(in_path, 'logposterior.npy'))
 
-for folder in folders:
-    results = os.path.join(in_path, folder)
-
-    Nd = np.load(os.path.join(results, 'Nd.npy'))
-    Nk = np.load(os.path.join(results, 'Nk.npy'))
-    theta = np.load(os.path.join(results, 'theta.npy'))
-    phi = np.load(os.path.join(results, 'phi.npy'))
-    z = np.load(os.path.join(results, 'z.npy'))
-
-    # Dictionary and stopwords
-    with open(os.path.join(results, 'vocab.json')) as f:
-        vocab = json.load(f)
-    stopwords = open('data/stopwords-sv.txt','r')
-    stopwords = stopwords.read().splitlines()
-
-    # Results
-    distinctwords = utils.distinctWords(Nk, vocab, 20)
-    topwords = utils.topWords(phi, vocab, stopwords, 20)
-
-    # Import target word and year from context window data
-    file = '_'.join(folder.split('_')[:3]) + '.json'
+    file = '_'.join(folder.split('/')[-1].split('_')[:3]) + '.json'
+    
     with open(os.path.join('data/context_windows', file)) as f:
         data = json.load(f)
-    
+    with open(os.path.join(in_path, 'vocab.json')) as f:
+        vocab = json.load(f)
+    with open('data/stopwords-sv.txt','r') as f:
+        stopwords = f.read().splitlines()
+
     doc = data["doc"]
-    years = list(map(lambda x: cleanYear(x.split('/')[0]), data["file_dir"]))
+    w = data["w"]
+    file_dir = data["file_path"]
+    years = list(map(lambda x: cleanYear(x.split('/')[3]), file_dir))
     target = list(map(lambda x: x[:4], data["target"])) # Lemmatize
-
     M, V, K = len(z), np.shape(Nk)[1], len(Nd)
-
-    # Sort topic indicators in descending order
     z, phi, Nk = utils.z_sorter(z, phi, Nk, K)
 
-    fig, ax = utils.senses_over_time(years, doc, z, K)
-    plt.savefig(os.path.join(results, 'senses_over_time.png'), dpi=300, bbox_inches='tight')
+    color = ['#006BA4', '#FF800E', '#ABABAB', '#595959', '#5F9ED1',\
+             '#C85200', '#898989', '#A2C8EC', '#FFBC79', '#CFCFCF'][:K]
+
+    out_path = os.path.join(folder, 'analysis')
+    f = utils.convergence_plot(logdensity, 1000, color)
+    plt.savefig(os.path.join(out_path, 'logdensity.png'), dpi=300, bbox_inches='tight')
     plt.close()
 
-    fig, ax = utils.word_freq_over_time(years, target, relative=True)
-    plt.savefig(os.path.join(results, 'word_prop_over_time.png'), dpi=300, bbox_inches='tight')
+    f = utils.senses_over_time(years, doc, z, color)
+    plt.savefig(os.path.join(out_path, 'senses_over_time.png'), dpi=300, bbox_inches='tight')
     plt.close()
 
-    fig, ax = utils.word_freq_over_time(years, target, relative=False)
-    plt.savefig(os.path.join(results, 'word_freq_over_time.png'), dpi=300, bbox_inches='tight')
+    f = utils.word_freq_over_time(years, target, color)
+    plt.savefig(os.path.join(out_path, 'word_prop_over_time.png'), dpi=300, bbox_inches='tight')
     plt.close()
 
-    topwords = utils.topWords(phi, vocab, stopwords)
-    distinctwords = utils.distinctWords(Nk, vocab)
+    topwords = utils.topWords(phi, vocab, K, stopwords)
+    topwords.to_csv(os.path.join(out_path, 'top_words.csv'), index=False)
+    
+    distinctwords = utils.distinctWords(Nk, vocab, K)
+    distinctwords.to_csv(os.path.join(out_path, 'distinct_words.csv'), index=False)
 
-    topwords.to_csv(os.path.join(results, 'top_words.csv'), index=False)
-    distinctwords.to_csv(os.path.join(results, 'distinct_words.csv'), index=False)
+    topdocs = utils.topDocs(doc, w, logposterior, K, file_dir, n=20, seed=123)
+    with open('/'.join([out_path, 'top_docs_by_topic.txt']), 'w') as f:
+        for line in topdocs:
+            f.write(line + '\n'*2)
+
     print(f'Folder {folder} finished.')
+
+if __name__ == "__main__":
+    results = 'results/second-run'
+    folders = sorted(os.listdir(results))
+    folders = [f for f in folders if f.startswith('j')]
+    for folder in folders:
+        if os.path.isdir(os.path.join(results, folder)):
+            main(os.path.join(results, folder))
