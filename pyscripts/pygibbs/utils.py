@@ -66,20 +66,26 @@ def distinctWords(Nk, vocab, K, n=20, beta=0):
     return distinctwords
 
 # add target words to be appended to stopwords
-def topWords(phi, vocab, K, stopwords=False, n=20):
+def topWords(phi, vocab, K, stopwords=None, targets=None, n=20):
     """
     Computes top n p(w|K=k)
     :param stopwords: list of stopwords
     """
-    if stopwords != False:
+    if stopwords and targets:
+        stopwords.extend(targets)
+    elif targets:
+        stopwords = targets
+
+    if stopwords:
         idx = [i for i in [vocab.get(word) for word in stopwords] if i is not None]
-        vocab = {i:word for i,word in enumerate([word for word in vocab if word not in stopwords])}
+        vocab = {word:i for i,word in enumerate([word for word in vocab if word not in stopwords])}
         phi = np.delete(phi, idx, axis=1)
 
     word_list = []
     for k in range(K):
         indices = (-phi[k]).argsort()[:n]
-        word_list.append([vocab.get(key) for key in indices])
+        
+        word_list.append([key for key,value in vocab.items() if value in indices])
     topwords = pd.DataFrame(np.array(word_list).T)
     topwords.columns = list(range(K))
 
@@ -102,11 +108,11 @@ def topDocs(doc, w, posterior, K, file_dir, n=10, seed=123):
         indices = (-posterior[indices_map[:, 1], k]).argsort()[:n]
         indices = indices_map[indices, 0]
         topdocs.append(f'Topic {k}:')
-        
+
         for idx in indices:
             word_indices = [i for i,m in enumerate(doc) if m == idx]
-            words = ' '.join(w[word_indices[0]:word_indices[-1]])
-            topdocs.append(f'{words} ({file_dir[word_indices[0]]})')
+            words = ' '.join(w[word_indices[0]:word_indices[-1]+1])            
+            topdocs.append(f'{words} ({file_dir[doc[word_indices[0]]]})')
     
     return topdocs
 
@@ -170,7 +176,6 @@ def senses_over_time(time, doc, z, color, meta=None, variable=None, value=None):
                         upper = df.loc[df["z"] == k, "value"]
                         
                         if len(upper) == 0:
-                            print(value)
                             break
                         g.fill_between(df.loc[df["z"] == k, "time"], lower, upper, color=palmap[k])
 
