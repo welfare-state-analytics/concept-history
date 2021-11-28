@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import random
 from collections import Counter
 from bidict import bidict
 from sklearn.preprocessing import Normalizer
@@ -31,9 +32,10 @@ def tokenize(w):
     Maps words to integers and returns these together with vocabulary
     """
     vocab = set(w)
-    vocab = {token:i for i, token in enumerate(vocab)}
+    vocab = {token:i for i, token in enumerate(sorted(vocab))}
     w = [vocab[token] for token in w]
-    return w, vocab
+
+    return (w, vocab)
 
 def initDataframe(doc, w, M):
     """
@@ -42,6 +44,7 @@ def initDataframe(doc, w, M):
     df = pd.DataFrame(np.array((doc,w)).T)
     df.columns = ["doc", "w"]
     df = df.groupby('doc')['w'].apply(list).reset_index()
+
     return df
 
 def distinctWords(Nk, vocab, K, n=20, beta=0):
@@ -62,29 +65,11 @@ def distinctWords(Nk, vocab, K, n=20, beta=0):
 
     return distinctwords
 
-def topWords_old(phi, vocab, K, stopwords=False, n=20):
-    """
-    Computes top n p(w|K=k)
-    :param stopwords: list of stopwords   
-    """
-    if stopwords != False:
-        idx = [i for i in [vocab.get(word) for word in stopwords] if i is not None]
-        phi = np.delete(phi, idx, axis=1)
-    vocab_rev = bidict(vocab).inv
-    word_list = []
-    
-    for k in range(K):
-        indices = (-phi[k]).argsort()[:n]
-        word_list.append([vocab_rev.get(key) for key in indices])
-    topwords = pd.DataFrame(np.array(word_list).T)
-    topwords.columns = list(range(K))
-
-    return topwords
-
+# add target words to be appended to stopwords
 def topWords(phi, vocab, K, stopwords=False, n=20):
     """
     Computes top n p(w|K=k)
-    :param stopwords: list of stopwords   
+    :param stopwords: list of stopwords
     """
     if stopwords != False:
         idx = [i for i in [vocab.get(word) for word in stopwords] if i is not None]
@@ -100,56 +85,141 @@ def topWords(phi, vocab, K, stopwords=False, n=20):
 
     return topwords
 
-def senses_over_time(time, doc, z, K, color, relative=True):
+def topDocs(doc, w, posterior, K, file_dir, n=10, seed=123):
+    """
+    Computes the top n p(m|K=k)
+    Retrives documents most associated with each topic.
+    Shuffling is used to solve conflicts with equally dominant documents.
+    """
+    random.seed(seed)
+    M = len(posterior)
+    indices_map = random.sample(range(M), M)
+    indices_map = np.array([list(range(M)), indices_map]).T
+    topdocs = []
+
+    for k in range(K):
+        # Get original topdoc indices from shuffled posterior
+        indices = (-posterior[indices_map[:, 1], k]).argsort()[:n]
+        indices = indices_map[indices, 0]
+        topdocs.append(f'Topic {k}:')
+        
+        for idx in indices:
+            word_indices = [i for i,m in enumerate(doc) if m == idx]
+            words = ' '.join(w[word_indices[0]:word_indices[-1]])
+            topdocs.append(f'{words} ({file_dir[word_indices[0]]})')
+    
+    return topdocs
+
+def convergence_plot(loss, burn_in=0, color=None):
+    epochs = len(loss)
+    df = pd.DataFrame({
+        'epoch': list(range(epochs)), 
+        'y': loss,
+        'burn': ['A']*burn_in + ['B']*(epochs-burn_in)})
+    
+    pal = sns.color_palette(['#808080', color[0]]) if color is not None else color
+    with sns.axes_style("whitegrid"):
+        f = sns.lineplot(x='epoch', y='y', hue='burn', data=df, palette=pal)
+        f.get_legend().remove()
+        f.set_ylabel('')
+        f.set(xlabel = "Epoch", ylabel = "Log joint density")
+        sns.despine()
+
+    return f
+
+def senses_over_time(time, doc, z, color, meta=None, variable=None, value=None):
     """
     Plots senses over time from integer lists of inputs.
     Relative normalizes sense counts to proportions in each given timeframe.
     """
-    z_long = [z[m] for m in doc]
-    df = pd.DataFrame({'time': time, 'z': z_long})
-    df = pd.crosstab(df["time"], df["z"], normalize='index' if relative else False)
-    df["time"] = df.index
-    df = pd.melt(df, 'time')
+    K = max(z)+1
+    X = pd.DataFrame({'time': time, 'z': z})
+    if isinstance(meta, pd.DataFrame) and variable and value:
+        X[variable] = meta[variable]
+        X = X.loc[X[variable] == value]
 
-    fig, ax = plt.subplots()
-    plt.xlabel('time')
-    plt.ylabel('proportion' if relative else 'frequency')
-    if relative:
-        plt.yticks(np.arange(0, 1, 0.2))
-    plt.legend([f'sense:{k}' for k in range(K)])
-    ax.spines[["top","right"]].set_visible(False)
+    f = plt.figure()
+    gs = f.add_gridspec(2, 2)
 
-    pal = sns.color_palette(color)
-    palmap = dict_variable = {key:value for (key,value) in zip(list(range(K)), pal)}
-    ax = sns.lineplot(x=df['time'], y=df['value'], hue=df['z'], palette=palmap)
+    pal = sns.color_palette(color)[:K]
+    palmap = {key:value for (key,value) in enumerate(pal)}
 
-    return (fig, ax)
+    for col in range(gs.ncols):
+        relative = True if col == 1 else False
+        ylab = 'Proportion' if relative else 'Frequency'
 
-def word_freq_over_time(time, target, color, relative=True):
+        for row in range(gs.nrows):
+            df = pd.crosstab(X["time"], X["z"], normalize='index' if relative else False)
+            if row == 1: df = df.cumsum(axis=1)
+            df["time"] = df.index
+            df = pd.melt(df, 'time')
+
+            with sns.axes_style("whitegrid"):
+                ax = f.add_subplot(gs[row, col])
+                sns.despine()
+                g = sns.lineplot(x=df['time'], y=df['value'], hue=df['z'], palette=palmap)
+                g.get_legend().remove()
+
+                if row == 0:
+                    g.set(xlabel=None)
+                    g.set_ylabel(ylab)
+                if row == 1:
+                    g.set_ylabel(' '.join(['Stacked', ylab.lower()]))
+                    for k in range(K):
+                        lower = df.loc[df["z"] == k-1, "value"] if k != 0 else 0
+                        upper = df.loc[df["z"] == k, "value"]
+                        
+                        if len(upper) == 0:
+                            print(value)
+                            break
+                        g.fill_between(df.loc[df["z"] == k, "time"], lower, upper, color=palmap[k])
+
+    f.legend(labels=list(range(K)),
+               loc="center right",
+               title="Sense",
+               bbox_to_anchor=(1, 0.5))
+
+    return f
+
+def word_freq_over_time(time, target, color):
     """
     Plots word freqs over time from integer lists of inputs.
     Target word list should be lematized.
     """
+    lemmas = sorted(list(set(target)))
     df = pd.DataFrame({'time': time, 'target': target})
     df = pd.crosstab(df["time"], df["target"])
+    df["time"] = df.index
+    df = pd.melt(df, 'time')
+    
+    f = plt.figure()
+    gs = f.add_gridspec(2, 1)
 
-    lemmas = sorted(list(set(target)))
-    legend = []
-    fig, ax = plt.subplots()
+    pal = sns.color_palette(color)[:len(lemmas)]
+    palmap = {key:value for (key,value) in zip(lemmas,pal)}
+    
+    for row in range(2):
+        if row == 1: df["value"] = df.groupby('time')["value"].transform(lambda x: x / x.sum())
+        with sns.axes_style("whitegrid"):
+            ax = f.add_subplot(gs[row])
+            sns.despine()
+            g = sns.lineplot(x=df['time'], y=df['value'], hue=df['target'], palette=palmap)
+            g.get_legend().remove()
 
-    if relative == True:
-        df = df.div(df.sum(axis=1), axis=0)
-        plt.yticks(np.arange(0, 1.01, 0.2))
+            if row == 0:
+                g.set(xlabel=None)
+                g.set(ylabel="Frequency")
 
-    for i,lemma in enumerate(lemmas):
-        plt.plot(df.index, df[lemma], color=color[i])
-        legend.append(f'lemma: {lemma}')
-    plt.legend(legend)
-    plt.xlabel('time')
-    plt.ylabel('proportion' if relative else 'frequency')
-    ax.spines[["top","right"]].set_visible(False)
+            if row == 1:
+                g.set(xlabel="Time")
+                g.set(ylabel="Proportion")
+            
+    f.legend(labels=lemmas,
+           loc="center right",
+           title="Lemmas",
+           bbox_to_anchor=(1, 0.5))
 
-    return (fig, ax)
+    return f
 
 def z_sorter(z, phi, Nk, K):
     """
