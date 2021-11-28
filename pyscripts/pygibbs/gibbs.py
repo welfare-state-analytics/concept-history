@@ -2,7 +2,7 @@ import numpy as np
 import progressbar
 from scipy.special import logsumexp
 
-def gibbsInit(df, V, K):
+def computeCounts(df, V, K):
     """
     Creates sufficient statistic matrices Nd and Nk
     """
@@ -16,6 +16,36 @@ def gibbsInit(df, V, K):
         np.add.at(Nk[z], w, 1)
 
     return(Nd, Nk)
+
+def decrementCounts(w, z, Nd, Nk):
+    np.subtract.at(Nk[z], w, 1)
+    Nd[z] -= 1
+
+def incrementCounts(w, z, Nd, Nk):
+    np.add.at(Nk[z], w, 1)
+    Nd[z] += 1
+
+def z_sample_step(w, logtheta, logphi, K):
+    logprobs = logtheta + np.take(logphi, w, axis=1).sum(axis=1)
+    z = np.random.choice(K, p = np.exp(logprobs - logsumexp(logprobs)))
+    return z
+
+def z_sampler(df, logtheta, logphi, V, K):
+    z = df["w"].apply(z_sample_step, args=(logtheta, logphi, K))
+    Nd, Nk = computeCounts(df, V, K)
+    return (z, Nd, Nk)
+
+def z_sampler_old(df, logtheta, logphi, Nd, Nk, M, K):
+    """
+    Gibbs sampling step for topic indicator
+    """
+    Z = np.empty(M, dtype=int)
+    for m in range(M):
+        w,z = df.loc[m,["w","z"]]
+        decrementCounts(w, z, Nd, Nk)
+        Z[m] = z_sample_step(w,z,logtheta,logphi,Nd,Nk,K)
+        incrementCounts(w, z, Nd, Nk)
+    return Z
 
 def logphi_sampler(Nk, beta):
     """
@@ -31,34 +61,6 @@ def logtheta_sampler(Nd, alpha):
     theta = np.array(np.random.dirichlet(Nd + alpha))
     return np.log(theta)
 
-def z_sample_step(w, z, logtheta, logphi, Nd, Nk, K):
-    """
-    Samples 1 topic indicator and updates sufficient statistic counts
-    """
-    # Decrement counts
-    np.subtract.at(Nk[z], w, 1)
-    Nd[z] -= 1
-
-    # Sample z
-    logprobs = logtheta + np.take(logphi, w, axis=1).sum(axis=1)
-    z = np.random.choice(K, p = np.exp(logprobs - logsumexp(logprobs)))
-
-    # Increment counts
-    np.add.at(Nk[z], w, 1)
-    Nd[z] += 1
-
-    return (Nd, Nk, z)
-
-def z_sampler(df, logtheta, logphi, Nd, Nk, M, K):
-    """
-    Gibbs sampling step for topic indicator
-    """
-    Z = np.empty(M, dtype=int)
-    for m in range(M):
-        w,z = df.loc[m,["w","z"]]
-        Nd, Nk, Z[m] = z_sample_step(w,z,logtheta,logphi,Nd,Nk,K)
-    return (Nd, Nk, Z)
-
 def logDensity(logtheta, logphi, Nd, Nk, alpha, beta):
     """
     Joint log density of multinomial clustering model
@@ -66,7 +68,7 @@ def logDensity(logtheta, logphi, Nd, Nk, alpha, beta):
     return np.multiply((Nd + alpha - 1), logtheta).sum() + \
            np.multiply((Nk + beta - 1), logphi).sum()
 
-def gibbsSampler(df, M, V, K, alpha, beta, epochs, burn_in, sample_intervals, sample_post=True):
+def gibbsSampler(df, M, V, K, alpha, beta, epochs, burn_in, sample_intervals, Nd=None, Nk=None, sample_post=True):
     """
     Main Gibbs sampling function
     """
@@ -75,7 +77,8 @@ def gibbsSampler(df, M, V, K, alpha, beta, epochs, burn_in, sample_intervals, sa
         posterior = np.zeros((M, K), dtype=int)
         row_indices = list(range(M))
 
-    Nd, Nk = gibbsInit(df, V, K)
+    if Nd == None and Nk == None:
+        Nd, Nk = computeCounts(df, V, K)
     theta_out = np.zeros(K, dtype = 'float')
     phi_out = np.zeros((K, V), dtype = 'float')
     n_samples = 0
@@ -83,7 +86,7 @@ def gibbsSampler(df, M, V, K, alpha, beta, epochs, burn_in, sample_intervals, sa
     for e in progressbar.progressbar(range(epochs)):
         logtheta = logtheta_sampler(Nd, alpha)
         logphi = logphi_sampler(Nk, beta)
-        Nd, Nk, df["z"] = z_sampler(df,logtheta,logphi,Nd,Nk,M,K)
+        z, Nd, Nk = z_sampler(df, logtheta, logphi, V, K)
         logdensity.append(logDensity(logtheta,logphi,Nd,Nk,alpha,beta))
 
         # Save samples in given intervals
