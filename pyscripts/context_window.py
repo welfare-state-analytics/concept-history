@@ -8,6 +8,8 @@ import os, json
 import re
 import progressbar
 from lxml import etree
+import yaml
+import argparse
 
 def count_files(path, extension='.xml'):
     """
@@ -91,8 +93,8 @@ def create_contexts(crp, target, window_size, n_files, parser):
                                 Nm = len(context)
                                 data["w"].extend(context)
                                 data["doc"].extend([n_pseudodocs]*Nm)
-                                data["target"].extend([word]*Nm)
-                                data["file_path"].extend([file_path]*Nm)
+                                data["target"].append(word)
+                                data["file_path"].append(file_path)
                                 data["id"].append(idx)
                                 data["pos"].append(i)
                                 n_pseudodocs += 1
@@ -101,29 +103,25 @@ def create_contexts(crp, target, window_size, n_files, parser):
             
     return data
 
-def main():
-    # Args
-    window_sizes = [5, 10, 20, 50]
-    projects = ['f', 'j']
-    corpus_path = '../riksdagen-corpus/corpus'
-    targets_path = 'data/target-words.json'
-    out_path = 'data/context_windows'
+def main(args):
+    with open(args.config, 'r') as f:
+        config = yaml.safe_load(f)
 
-    with open(targets_path) as j:
-        targets = json.load(j)
     parser = etree.XMLParser(remove_blank_text=True)
-    n_files = count_files(corpus_path)
+    n_files = count_files(config["paths"]["corpus"])
 
-    for window_size in window_sizes:
-        for project in projects:
-            target = targets['target_' + project]
-            crp = corpus_iterator(corpus_path)
+    for window_size in config["window_sizes"]:
+        for project in config["projects"]:
+            target = config["targets"][project]
+            crp = corpus_iterator(config["paths"]["corpus"])
             data = create_contexts(crp, target, window_size, n_files, parser)
             file_name = f'{project}_window_{window_size}.json'
-            with open('/'.join([out_path, file_name]), "w") as outfile:
+            with open('/'.join([config["paths"]["data"], file_name]), "w") as outfile:
                 json.dump(data, outfile)
             print(f'Window size {window_size} finished for project {project}.')
 
-if __name__ == "__main__":
-    main()
-
+if __name__ == '__main__':
+    argparser = argparse.ArgumentParser(description=__doc__)
+    argparser.add_argument("--config", type=str)
+    args = argparser.parse_args()
+    main(args)
