@@ -19,9 +19,9 @@ def main(args):
     sample_intervals = config["hyper"]["sample_intervals"]
     files = [f for f in os.listdir(config["paths"]["data"]) if
             f.endswith('.json') and
-            f[0 in config["projects"]] and
+            f.split('_')[0] in config["projects"] and
             int(re.findall(r'\d+', f)[0]) in config["window_sizes"]]
-    
+
     for file in files:
         with open(os.path.join(config["paths"]["data"], file)) as f:
             data = json.load(f)
@@ -43,14 +43,17 @@ def main(args):
             theta, phi, Nd, Nk, df["z"], logdensity, posterior = \
             gibbs.gibbsSampler(df, M, V, k, alpha, beta, epochs, burn_in, sample_intervals)
 
-            # Store results
-            out = '_'.join([file.split('.')[0], 'topic', str(k)])
-            out = os.path.join(config["paths"]["results"], out, 'model')
-            print(out)
-            try:
-                os.mkdir(out)
-            except:
-                pass
+            project = file.split('_')[0]
+            c = file.split('.json')[0][-1]
+            subdirs = [project, 'model', f'window_{c}_topic_{k}']
+            out = config["paths"]["results"]
+            
+            for i in range(len(subdirs)):
+                out = os.path.join(out, subdirs[i])
+                try:
+                    os.mkdir(out)
+                except:
+                    pass
             
             np.save(os.path.join(out, 'theta.npy'), theta)
             np.save(os.path.join(out, 'phi.npy'), phi)

@@ -3,10 +3,8 @@ import pandas as pd
 import random
 from collections import Counter
 from bidict import bidict
-from sklearn.preprocessing import Normalizer
 import matplotlib.pyplot as plt
 import seaborn as sns
-import subprocess
 
 def rareWords(doc, w, thresh=5):
     """
@@ -133,7 +131,7 @@ def convergence_plot(loss, burn_in=0, color=None):
 
     return f
 
-def senses_over_time(time, doc, z, color, meta=None, variable=None, value=None):
+def senses_over_time(time, doc, z, color, meta=None, variable=None, value=None, xlim=False):
     """
     Plots senses over time from integer lists of inputs.
     Relative normalizes sense counts to proportions in each given timeframe.
@@ -165,6 +163,8 @@ def senses_over_time(time, doc, z, color, meta=None, variable=None, value=None):
                 sns.despine()
                 g = sns.lineplot(x=df['time'], y=df['value'], hue=df['z'], palette=palmap)
                 g.get_legend().remove()
+                if xlim == True:
+                    g.set_xlim([min(time), max(time)])
 
                 if row == 0:
                     g.set(xlabel=None)
@@ -238,15 +238,3 @@ def z_sorter(z, phi, Nk, K):
     phi = phi[z_sorted]
     Nk = Nk[z_sorted]
     return (z, phi, Nk)
-
-def git_auto_push(path, message):
-    """
-    Used to automatically upload results inbetween training of models.
-    """
-    subprocess.call('git config --global credential.helper store', shell=True)
-    subprocess.call('git pull', shell=True)
-    subprocess.call(f'git add {path}', shell=True)
-    subprocess.call(f'git commit -m "{message}"', shell=True)
-    subprocess.call('git push', shell=True)
-
-    

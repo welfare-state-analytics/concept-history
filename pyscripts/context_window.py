@@ -6,10 +6,10 @@ To do: Currently repeats the process for each window size.
 import numpy as np
 import os, json
 import re
-import progressbar
 from lxml import etree
 import yaml
 import argparse
+from time import time
 
 def count_files(path, extension='.xml'):
     """
@@ -77,48 +77,46 @@ def create_contexts(crp, target, window_size, n_files, parser):
     """
     keys = ["w", "doc", "target", "file_path", "id", "pos"]
     data = {key: [] for key in keys}
-    n_pseudodocs, c = 0, 0
+    n_pseudodocs = 0
 
-    with progressbar.ProgressBar(max_value=n_files) as bar:
-        for file_path in crp:
-            root = etree.parse(file_path, parser).getroot()
-            speeches = speech_iterator(root)
-            if speeches != None:
-                for speech, idx in speeches:
-                    speech = speech_processor(speech)
-                    if set(speech).intersection(target):
-                        for i, word in enumerate(speech):
-                            if word in target:
-                                context = create_context(speech, i, window_size)
-                                Nm = len(context)
-                                data["w"].extend(context)
-                                data["doc"].extend([n_pseudodocs]*Nm)
-                                data["target"].append(word)
-                                data["file_path"].append(file_path)
-                                data["id"].append(idx)
-                                data["pos"].append(i)
-                                n_pseudodocs += 1
-            c += 1
-            bar.update(c)
+    for file_path in crp:
+        root = etree.parse(file_path, parser).getroot()
+        speeches = speech_iterator(root)
+        if speeches != None:
+            for speech, idx in speeches:
+                speech = speech_processor(speech)
+                if set(speech).intersection(target):
+                    for i, word in enumerate(speech):
+                        if word in target:
+                            context = create_context(speech, i, window_size)
+                            Nm = len(context)
+                            data["w"].extend(context)
+                            data["doc"].extend([n_pseudodocs]*Nm)
+                            data["target"].append(word)
+                            data["file_path"].append(file_path)
+                            data["id"].append(idx)
+                            data["pos"].append(i)
+                            n_pseudodocs += 1
             
     return data
 
 def main(args):
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
-
+    with open(config["paths"]["target"]) as f:
+        targets = json.load(f)
     parser = etree.XMLParser(remove_blank_text=True)
     n_files = count_files(config["paths"]["corpus"])
 
     for window_size in config["window_sizes"]:
+        start = time()
         for project in config["projects"]:
-            target = config["targets"][project]
             crp = corpus_iterator(config["paths"]["corpus"])
-            data = create_contexts(crp, target, window_size, n_files, parser)
+            data = create_contexts(crp, targets["target_"+project], window_size, n_files, parser)
             file_name = f'{project}_window_{window_size}.json'
             with open('/'.join([config["paths"]["data"], file_name]), "w") as outfile:
                 json.dump(data, outfile)
-            print(f'Window size {window_size} finished for project {project}.')
+            print(f'Window size {window_size} finished for project {project} after {(time()-start)//60} minutes.')
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser(description=__doc__)
