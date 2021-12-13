@@ -1,5 +1,4 @@
 import numpy as np
-import progressbar
 from scipy.special import logsumexp
 
 def gibbsInit(df, V, K):
@@ -80,7 +79,7 @@ def gibbsSampler(df, M, V, K, alpha, beta, epochs, burn_in, sample_intervals, sa
     phi_out = np.zeros((K, V), dtype = 'float')
     n_samples = 0
     logdensity = []
-    for e in progressbar.progressbar(range(epochs)):
+    for e in range(epochs):
         logtheta = logtheta_sampler(Nd, alpha)
         logphi = logphi_sampler(Nk, beta)
         Nd, Nk, df["z"] = z_sampler(df,logtheta,logphi,Nd,Nk,M,K)
@@ -95,7 +94,3 @@ def gibbsSampler(df, M, V, K, alpha, beta, epochs, burn_in, sample_intervals, sa
                 np.add.at(posterior, tuple([row_indices, df["z"]]), 1)
 
     return (theta_out/n_samples, phi_out/n_samples, Nd, Nk, df["z"], logdensity, posterior)
-
-
-
-

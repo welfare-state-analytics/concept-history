@@ -103,18 +103,18 @@ def create_contexts(crp, target, window_size, n_files, parser):
 def main(args):
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
-    with open(config["paths"]["target"]) as f:
+    with open(config["target"]) as f:
         targets = json.load(f)
     parser = etree.XMLParser(remove_blank_text=True)
-    n_files = count_files(config["paths"]["corpus"])
+    n_files = count_files(config["corpus"])
 
     for window_size in config["window_sizes"]:
         start = time()
         for project in config["projects"]:
-            crp = corpus_iterator(config["paths"]["corpus"])
+            crp = corpus_iterator(config["corpus"])
             data = create_contexts(crp, targets["target_"+project], window_size, n_files, parser)
             file_name = f'{project}_window_{window_size}.json'
-            with open('/'.join([config["paths"]["data"], file_name]), "w") as outfile:
+            with open('/'.join([config["data"], file_name]), "w") as outfile:
                 json.dump(data, outfile)
             print(f'Window size {window_size} finished for project {project} after {(time()-start)//60} minutes.')
 

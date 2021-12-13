@@ -10,20 +10,19 @@ import re
 def main(args):
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
-
-    K = config["hyper"]["K"]
-    a = config["hyper"]["alpha"]
-    b = config["hyper"]["beta"]
-    epochs = config["hyper"]["epochs"]
-    burn_in = config["hyper"]["burn_in"]
-    sample_intervals = config["hyper"]["sample_intervals"]
-    files = [f for f in os.listdir(config["paths"]["data"]) if
+    K = config["K"]
+    a = config["alpha"]
+    b = config["beta"]
+    epochs = config["epochs"]
+    burn_in = config["burn_in"]
+    sample_intervals = config["sample_intervals"]
+    files = [f for f in os.listdir(config["data"]) if
             f.endswith('.json') and
             f.split('_')[0] in config["projects"] and
             int(re.findall(r'\d+', f)[0]) in config["window_sizes"]]
 
     for file in files:
-        with open(os.path.join(config["paths"]["data"], file)) as f:
+        with open(os.path.join(config["data"], file)) as f:
             data = json.load(f)
 
         doc = data["doc"]
@@ -45,11 +44,10 @@ def main(args):
 
             project = file.split('_')[0]
             c = file.split('.json')[0][-1]
-            subdirs = [project, 'model', f'window_{c}_topic_{k}']
-            out = config["paths"]["results"]
+            subdirs = [config["results"], project, f'window_{c}_topic_{k}', 'model']
             
             for i in range(len(subdirs)):
-                out = os.path.join(out, subdirs[i])
+                out = '/'.join(subdirs[:i+1])
                 try:
                     os.mkdir(out)
                 except:

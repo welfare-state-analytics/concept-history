@@ -43,5 +43,25 @@
         "massmediernas",
         "massmediet",
         "massmediets"
+    ],
+    "target_skarv": [
+        "skarv",
+        "skarven",
+        "skarvar",
+        "skarvs",
+        "skarvens",
+        "skarvars",
+        "skarvarna",
+        "_skarvarnas"
+   ],
+    "target_fluga": [
+        "fluga",
+        "flugas",
+        "flugan",
+        "flugans",
+        "flugor",
+        "flugors",
+        "flugorna",
+        "_flugornas"
     ]
 }
