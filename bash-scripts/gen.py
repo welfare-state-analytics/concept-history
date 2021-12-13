@@ -71,8 +71,8 @@ def individual_run(c, p, K):
     f_out.write(params_str_yaml)
     f_out.close()
 
-    subprocess.call(['bash', run_filename + '.sh'])
-    # subprocess.call(['sbatch', run_filename + '.sh']) # something like this for cluster run
+    # subprocess.call(['bash', run_filename + '.sh'])
+    subprocess.call(['sbatch', run_filename + '.sh']) # something like this for cluster run
 
     os.remove(run_filename + ".sh")
     os.remove(run_filename + ".yml")
