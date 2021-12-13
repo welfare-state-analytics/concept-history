@@ -1,0 +1,10 @@
+numpy
+pandas
+pyyaml
+matplotlib
+lxml
+scipy
+bidict
+seaborn
+progressbar
+regex
