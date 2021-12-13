@@ -86,7 +86,6 @@ def main():
         for p in ['fluga', 'skarv']:
             for K in [1, 2]:
                 individual_run(c,p,K)
-                return
 
 if __name__ == '__main__':
     main()
