@@ -16,7 +16,7 @@ module load python/3.6.8
 export CONFIG={}
 
 # Create dataset
-#python3 pyscripts/context_window.py --config $CONFIG
+python3 pyscripts/context_window.py --config $CONFIG
 
 # Run model 
 python3 pyscripts/real_data_gibbs.py --config $CONFIG
