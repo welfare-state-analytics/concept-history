@@ -74,8 +74,8 @@ def individual_run(c, p, K):
     # subprocess.call(['bash', run_filename + '.sh'])
     subprocess.call(['sbatch', run_filename + '.sh']) # something like this for cluster run
 
-    os.remove(run_filename + ".sh")
-    os.remove(run_filename + ".yml")
+    # os.remove(run_filename + ".sh")
+    # os.remove(run_filename + ".yml")
 
 def main():
     try:
