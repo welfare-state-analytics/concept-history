@@ -16,15 +16,16 @@ def cleanYear(year):
 def main(args):
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
-    results = config["paths"]["results"]
+    results = config["results"]
     projects = config["projects"]
     window_sizes = config["window_sizes"]
-    K = config["hyper"]["K"]
+    K = config["K"]
     for project in projects:
         for c in window_sizes:
-            for k in K:
+            for k in K:                
                 start = time()
-                in_path = f'{results}/{project}/model/window_{c}_topic_{k}'
+
+                in_path = f'{results}/{project}/window_{c}_topic_{k}/model'
                 Nd = np.load(os.path.join(in_path, 'Nd.npy'))
                 Nk = np.load(os.path.join(in_path, 'Nk.npy'))
                 theta = np.load(os.path.join(in_path, 'theta.npy'))
@@ -33,36 +34,37 @@ def main(args):
                 logdensity = np.load(os.path.join(in_path, 'logdensity.npy'))
                 posterior = np.load(os.path.join(in_path, 'posterior.npy'))
 
-                meta = pd.read_csv(f'{config["paths"]["data"]}/{project}_meta.csv')
+                meta = pd.read_csv(f'{config["data"]}/{project}_meta.csv')
 
-                with open(os.path.join(config["paths"]["corpus"], 'party_mapping.json')) as f:
+                with open(os.path.join(config["corpus"], 'party_mapping.json')) as f:
                     party_map = json.load(f)
-                with open(os.path.join(config["paths"]["data"], f'{project}_window_{c}.json')) as f:
+                with open(os.path.join(config["data"], f'{project}_window_{c}.json')) as f:
                     data = json.load(f)
                 with open(os.path.join(in_path, 'vocab.json')) as f:
                     vocab = json.load(f)
-                with open(config["paths"]["stopwords"],'r') as f:
+                with open(config["stopwords"],'r') as f:
                     stopwords = f.read().splitlines()
 
                 doc = data["doc"]
                 w = data["w"]
                 file_dir = data["file_path"]
                 target = data["target"]
+                
                 years = list(map(lambda x: cleanYear(x.split('/')[3]), file_dir))
                 lemmas = list(map(lambda x: x[:4], data["target"])) # Lemmatize
-                M, V, K = len(z), np.shape(Nk)[1], len(Nd)
-                z, phi, Nk = utils.z_sorter(z, phi, Nk, K)
+                M, V = len(z), np.shape(Nk)[1]
+                z, phi, Nk = utils.z_sorter(z, phi, Nk, k)
 
                 color = ['#006BA4', '#FF800E', '#ABABAB', '#595959', '#5F9ED1',\
-                         '#C85200', '#898989', '#A2C8EC', '#FFBC79', '#CFCFCF'][:K]
+                         '#C85200', '#898989', '#A2C8EC', '#FFBC79', '#CFCFCF'][:k]
 
-                out = os.path.join(results, project, 'analysis')
+                out = os.path.join(results, project, f'window_{c}_topic_{k}', 'analysis')
                 try:
                     os.mkdir(out)
                 except:
                     pass
 
-                f = utils.convergence_plot(logdensity, config["hyper"]["burn_in"], color)
+                f = utils.convergence_plot(logdensity, config["burn_in"], color)
                 plt.savefig(os.path.join(out, 'logdensity.png'), dpi=300, bbox_inches='tight')
                 plt.close('all')
 
@@ -96,13 +98,13 @@ def main(args):
                 plt.savefig(os.path.join(out, 'word_prop_over_time.png'), dpi=300, bbox_inches='tight')
                 plt.close('all')
 
-                topwords = utils.topWords(phi, vocab, K, stopwords, list(set(target)))
+                topwords = utils.topWords(phi, vocab, k, stopwords, list(set(target)))
                 topwords.to_csv(os.path.join(out, 'top_words.csv'), index=False)
                 
-                distinctwords = utils.distinctWords(Nk, vocab, K)
+                distinctwords = utils.distinctWords(Nk, vocab, k)
                 distinctwords.to_csv(os.path.join(out, 'distinct_words.csv'), index=False)
 
-                topdocs = utils.topDocs(doc, w, posterior, K, file_dir, n=20, seed=123)
+                topdocs = utils.topDocs(doc, w, posterior, k, file_dir, n=20, seed=123)
                 with open('/'.join([out, 'top_docs_by_topic.txt']), 'w') as f:
                     for line in topdocs:
                         f.write(line + '\n'*2)

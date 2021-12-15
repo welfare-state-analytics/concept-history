@@ -6,7 +6,7 @@ from bidict import bidict
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def rareWords(doc, w, thresh=5):
+def rareWords(doc, w, target, thresh=5):
     """
     Drops rare words given lists of equal lenghts with documents and word tokens
     """
@@ -14,7 +14,7 @@ def rareWords(doc, w, thresh=5):
         print('Documents and word tokens are not of equal length')
         return
     c = Counter(w)
-    rare_words = set([key for key, value in c.items() if value < thresh])
+    rare_words = set([key for key, value in c.items() if value < thresh and key not in target])
 
     idx= []
     for i in range(len(w)):

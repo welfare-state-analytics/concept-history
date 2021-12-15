@@ -37,13 +37,13 @@ def main(args):
             alpha = np.ones(k)*a
             beta = np.ones((k,V))*b
             df["z"] = np.random.choice(k, M)
-
+            
             # Run Gibbs sampler
             theta, phi, Nd, Nk, df["z"], logdensity, posterior = \
             gibbs.gibbsSampler(df, M, V, k, alpha, beta, epochs, burn_in, sample_intervals)
 
             project = file.split('_')[0]
-            c = file.split('.json')[0][-1]
+            c = file.split('.json')[0].split('_')[-1]
             subdirs = [config["results"], project, f'window_{c}_topic_{k}', 'model']
             
             for i in range(len(subdirs)):

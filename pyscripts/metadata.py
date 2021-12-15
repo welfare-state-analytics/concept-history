@@ -12,22 +12,22 @@ from time import time
 def main(args):
 	with open(args.config, 'r') as f:
 		config = yaml.safe_load(f)
-	mop = pd.read_csv(os.path.join(config["paths"]["corpus"], 'members_of_parliament.csv'))
+	mop = pd.read_csv(os.path.join(config["corpus"], 'members_of_parliament.csv'))
 
 	# Find files with smallest window sizes for relevant projects
-	files = [f for f in os.listdir(config["paths"]["data"]) if
+	files = [f for f in os.listdir(config["data"]) if
 			f.endswith('.json') and
 			f.split('_')[0] in config["projects"] and
 			int(re.findall(r'\d+', f)[0]) in config["window_sizes"]]
 	
 	p = config["projects"]
 	c = [int(re.search(r'\d+', f).group(0)) for f in files]
-	df = pd.DataFrame({"c":c, "p":p}).groupby("p")["c"].min()
-
+	df = pd.DataFrame({"c":c, "p":p*int(len(c)//2)}).groupby("p")["c"].min()
+	
 	for p,c in df.iteritems():
 		start = time()
 		file = f'{p}_window_{c}.json'
-		with open(os.path.join(config["paths"]["data"], file)) as f:
+		with open(os.path.join(config["data"], file)) as f:
 			idx = json.load(f)["id"]
 
 		dt = dict(mop[config["metadata"]].dtypes)
@@ -37,7 +37,7 @@ def main(args):
 			member = mop[config["metadata"]].values[mop["id"] == idx[i]]
 			if len(member) > 0:
 				meta.loc[i] = member[0]
-		meta.to_csv(os.path.join(config["paths"]["data"], f'{p}_meta.csv'), index=False)
+		meta.to_csv(os.path.join(config["data"], f'{p}_meta.csv'), index=False)
 		print(f'Metadata collected for project {p} after {(time()-start)//60} minutes')
 
 if __name__ == '__main__':
