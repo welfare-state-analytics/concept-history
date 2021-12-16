@@ -27,7 +27,8 @@ def main(args):
 
         doc = data["doc"]
         w = data["w"]
-        doc, w = utils.rareWords(doc, w, thresh=10)
+        target = data["target"]
+        doc, w = utils.rareWords(doc, w, target, thresh=10)
         w, vocab = utils.tokenize(w)
         M, V = len(set(doc)), len(set(vocab))
         df = utils.initDataframe(doc, w, M)
