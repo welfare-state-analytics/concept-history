@@ -63,7 +63,8 @@ def main(args):
             np.save(os.path.join(out, 'logdensity.npy'), logdensity)
             with open(os.path.join(out, 'vocab.json'), "w") as f:
                 json.dump(vocab, f)
-
+                
+            
             print(f'Model {out.split("/")[-2]} finished after {(time()-start)//60} minutes.')
 
 if __name__ == '__main__':

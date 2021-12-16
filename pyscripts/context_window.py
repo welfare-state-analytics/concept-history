@@ -68,15 +68,19 @@ def create_context(speech, i, window_size):
     context = speech[lb:ub]
     return context
 
-def create_contexts(crp, target, window_size, n_files, parser):
+def create_contexts(crp, target, window_size, n_files, parser, mallet=False):
     """
     : param crp: generator object for xml filepaths
     : param target: list of target words to create windows around
     : param window_size: number of word tokens on each side of target word
     : param n_files: 
     """
-    keys = ["w", "doc", "target", "file_path", "id", "pos"]
-    data = {key: [] for key in keys}
+    if mallet == False:
+        keys = ["w", "doc", "target", "file_path", "id", "pos"]
+        data = {key:[] for key in keys}
+    elif mallet == True:
+        keys = ["context", "file_name", "pos"]
+        data = {key:[] for key in keys}
     n_pseudodocs = 0
 
     for file_path in crp:
@@ -89,15 +93,22 @@ def create_contexts(crp, target, window_size, n_files, parser):
                     for i, word in enumerate(speech):
                         if word in target:
                             context = create_context(speech, i, window_size)
-                            Nm = len(context)
-                            data["w"].extend(context)
-                            data["doc"].extend([n_pseudodocs]*Nm)
-                            data["target"].append(word)
-                            data["file_path"].append(file_path)
-                            data["id"].append(idx)
-                            data["pos"].append(i)
-                            n_pseudodocs += 1
-            
+                            if mallet == False:
+                                Nm = len(context)
+                                data["w"].extend(context)
+                                data["doc"].extend([n_pseudodocs]*Nm)
+                                data["target"].append(word)
+                                data["file_path"].append(file_path)
+                                data["id"].append(idx)
+                                data["pos"].append(i)
+                                n_pseudodocs += 1
+                            elif mallet == True:
+                                file_name = f"{n_pseudodocs}_{file_path.split('/')[-1].split('.')[0]}_{word}_{i}.txt"
+                                context = ' '.join(context)
+                                data["context"].append(context)
+                                data["file_name"].append(file_name)
+                                n_pseudodocs += 1
+
     return data
 
 def main(args):
@@ -108,15 +119,26 @@ def main(args):
     parser = etree.XMLParser(remove_blank_text=True)
     n_files = count_files(config["corpus"])
 
-    for window_size in config["window_sizes"]:
+    for c in config["window_sizes"]:
         start = time()
         for project in config["projects"]:
             crp = corpus_iterator(config["corpus"])
-            data = create_contexts(crp, targets["target_"+project], window_size, n_files, parser)
-            file_name = f'{project}_window_{window_size}.json'
-            with open('/'.join([config["data"], file_name]), "w") as outfile:
-                json.dump(data, outfile)
-            print(f'Window size {window_size} finished for project {project} after {(time()-start)//60} minutes.')
+            data = create_contexts(crp, targets["target_"+project], c, n_files, parser, config["mallet"])
+            if config["mallet"] == False:
+                file_name = f'{project}_window_{c}.json'
+                with open('/'.join([config["data"], file_name]), "w") as outfile:
+                    json.dump(data, outfile)
+            
+            elif config["mallet"] == True:
+                for context, file_name in zip(data["context"], data["file_name"]):
+                    subdirs = [config["data"], f'{project}_window_{c}']
+                    for i in range(len(subdirs)):
+                        out = '/'.join(subdirs[:i+1])
+                        exec('try:os.mkdir(out)\nexcept:pass')
+                    with open(os.path.join(out, file_name), 'w') as f:
+                        f.write(context)
+                    
+            print(f'Window size {c} finished for project {project} after {(time()-start)//60} minutes.')
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser(description=__doc__)
