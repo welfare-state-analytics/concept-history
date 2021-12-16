@@ -1,0 +1,26 @@
+K:
+- 5
+- 10
+alpha: 0.5
+beta: 0.5
+burn_in: 1
+corpus: ../riksdagen-corpus/corpus
+data: data/context_windows
+epochs: 2
+metadata:
+- party_abbrev
+- gender
+- born
+- id
+projects:
+- j
+- f
+results: results/second-run
+sample_intervals: 1
+stopwords: data/stopwords-sv.txt
+target: data/target-words.json
+window_sizes:
+- 5
+- 10
+- 20
+- 50
