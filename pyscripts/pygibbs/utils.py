@@ -114,24 +114,50 @@ def topDocs(doc, w, posterior, K, file_dir, n=10, seed=123):
     
     return topdocs
 
-def convergence_plot(loss, burn_in=0, color=None):
+def topic_props_over_time_table(time, z, periods):
+    """
+    Table with word proportions normalized over time periods.
+    Args: periods is an array with periods as rows.
+    """
+    K = max(z)+1
+    X = pd.DataFrame({'time': time, 'z': z})
+    df = pd.crosstab(X["time"], X["z"])
+    results = pd.DataFrame(np.zeros((len(periods), K), dtype=int))
+    for i, row in df.iterrows():
+        idx = np.where(periods == i)[0][0]
+        for k in range(K):
+            results.loc[idx,k] += row[k]
+    results.index = [str(periods[i,0]) + '-' + str(periods[i,-1]) for i in range(len(periods))]
+    results = results.div(results.sum(axis=1), axis=0)
+    results = np.round(results, 3)
+    return results
+
+def lemma_props_by_topic(lemmas, z):
+    X = pd.DataFrame({'lemmas':lemmas, 'z':z})
+    X = pd.crosstab(X["lemmas"], X["z"], normalize='index')
+    return np.round(X, 3)
+
+def convergence_plot(loss, color=None, xticks=None):
     epochs = len(loss)
     df = pd.DataFrame({
-        'epoch': list(range(epochs)), 
-        'y': loss,
-        'burn': ['A']*burn_in + ['B']*(epochs-burn_in)})
-    
-    pal = sns.color_palette(['#808080', color[0]]) if color is not None else color
+        'epoch': list(range(epochs)) if len(xticks)==None else xticks,
+        'y': loss})
+
+    if color != None:
+        pal = sns.color_palette(color)
     with sns.axes_style("whitegrid"):
-        f = sns.lineplot(x='epoch', y='y', hue='burn', data=df, palette=pal)
-        f.get_legend().remove()
+        if color != None:
+            f = sns.lineplot(x='epoch', y='y', data=df, palette=pal)
+        else:
+            f = sns.lineplot(x='epoch', y='y', data=df)
+        #f.get_legend().remove()
         f.set_ylabel('')
         f.set(xlabel = "Epoch", ylabel = "Log joint density")
         sns.despine()
 
     return f
 
-def senses_over_time(time, doc, z, color, meta=None, variable=None, value=None, xlim=False):
+def senses_over_time(time, z, color, meta=None, variable=None, value=None, xlim=False):
     """
     Plots senses over time from integer lists of inputs.
     Relative normalizes sense counts to proportions in each given timeframe.
@@ -144,9 +170,9 @@ def senses_over_time(time, doc, z, color, meta=None, variable=None, value=None, 
 
     f = plt.figure()
     gs = f.add_gridspec(2, 2)
-
-    pal = sns.color_palette(color)[:K]
-    palmap = {key:value for (key,value) in enumerate(pal)}
+    if color != None:
+        pal = sns.color_palette(color)[:K]
+        palmap = {key:value for (key,value) in enumerate(pal)}
 
     for col in range(gs.ncols):
         relative = True if col == 1 else False
@@ -161,7 +187,10 @@ def senses_over_time(time, doc, z, color, meta=None, variable=None, value=None, 
             with sns.axes_style("whitegrid"):
                 ax = f.add_subplot(gs[row, col])
                 sns.despine()
-                g = sns.lineplot(x=df['time'], y=df['value'], hue=df['z'], palette=palmap)
+                if color != None:
+                    g = sns.lineplot(x=df['time'], y=df['value'], hue=df['z'], palette=palmap)
+                else:
+                    g = sns.lineplot(x=df['time'], y=df['value'], hue=df['z'])
                 g.get_legend().remove()
                 if xlim == True:
                     g.set_xlim([min(time), max(time)])
@@ -177,7 +206,10 @@ def senses_over_time(time, doc, z, color, meta=None, variable=None, value=None, 
                         
                         if len(upper) == 0:
                             break
-                        g.fill_between(df.loc[df["z"] == k, "time"], lower, upper, color=palmap[k])
+                        if color != None:
+                            g.fill_between(df.loc[df["z"] == k, "time"], lower, upper, color=palmap[k])
+                        else:
+                            g.fill_between(df.loc[df["z"] == k, "time"], lower, upper)
 
     f.legend(labels=list(range(K)),
                loc="center right",
@@ -200,15 +232,19 @@ def word_freq_over_time(time, target, color):
     f = plt.figure()
     gs = f.add_gridspec(2, 1)
 
-    pal = sns.color_palette(color)[:len(lemmas)]
-    palmap = {key:value for (key,value) in zip(lemmas,pal)}
+    if color != None:
+        pal = sns.color_palette(color)[:len(lemmas)]
+        palmap = {key:value for (key,value) in zip(lemmas,pal)}
     
     for row in range(2):
         if row == 1: df["value"] = df.groupby('time')["value"].transform(lambda x: x / x.sum())
         with sns.axes_style("whitegrid"):
             ax = f.add_subplot(gs[row])
             sns.despine()
-            g = sns.lineplot(x=df['time'], y=df['value'], hue=df['target'], palette=palmap)
+            if color != None:
+                g = sns.lineplot(x=df['time'], y=df['value'], hue=df['target'], palette=palmap)
+            else:
+                g = sns.lineplot(x=df['time'], y=df['value'], hue=df['target'])
             g.get_legend().remove()
 
             if row == 0:
@@ -226,15 +262,25 @@ def word_freq_over_time(time, target, color):
 
     return f
 
-def z_sorter(z, phi, Nk, K):
+def z_sorter(z, theta, phi, Nd=None, Nk=None):
     """
     Sorts z in descending frequency order for easier comparisons between runs and models.
     """
+    K = len(phi)
     z_sorted = [count[0] for count in Counter(z).most_common()]
     z_list = list(range(K))
-    z_sorted.extend(z_list[len(z_sorted)-K:]) # adds back empty topics
-
+    z_sorted.extend([k for k in range(K) if k not in z_sorted]) # adds back empty topics
     z = [z_list[z_sorted.index(zi)] for zi in z]
+    theta = theta[:,z_sorted]
     phi = phi[z_sorted]
-    Nk = Nk[z_sorted]
-    return (z, phi, Nk)
+    results = [z, theta, phi]
+    if isinstance(Nd, np.array):
+        Nd = Nd[:,z_sorted]
+        results.append(Nd)
+    if isinstance(Nk, np.array):
+        Nk = Nk[z_sorted]
+        results.append(Nk)
+    return results
+
+
+
