@@ -20,11 +20,11 @@ def main(args):
     projects = config["projects"]
     window_sizes = config["window_sizes"]
     K = config["K"]
+
     for project in projects:
         for c in window_sizes:
-            for k in K:                
+            for k in K:
                 start = time()
-
                 in_path = f'{results}/{project}/window_{c}_topic_{k}/model'
                 Nd = np.load(os.path.join(in_path, 'Nd.npy'))
                 Nk = np.load(os.path.join(in_path, 'Nk.npy'))
@@ -36,11 +36,11 @@ def main(args):
 
                 meta = pd.read_csv(f'{config["data"]}/{project}_meta.csv')
 
-                with open(os.path.join(config["corpus"], 'party_mapping.json')) as f:
+                with open(os.path.join(config["corpus"], 'party_mapping.json'), 'r') as f:
                     party_map = json.load(f)
-                with open(os.path.join(config["data"], f'{project}_window_{c}.json')) as f:
+                with open(os.path.join(config["data"], f'{project}_window_{c}.json'), 'r') as f:
                     data = json.load(f)
-                with open(os.path.join(in_path, 'vocab.json')) as f:
+                with open(os.path.join(in_path, 'vocab.json'), 'r') as f:
                     vocab = json.load(f)
                 with open(config["stopwords"],'r') as f:
                     stopwords = f.read().splitlines()

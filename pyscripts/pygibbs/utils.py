@@ -114,27 +114,51 @@ def topDocs(doc, w, posterior, K, file_dir, n=10, seed=123):
     
     return topdocs
 
-def topic_props_over_time_table(time, z, periods):
+def lda_top_docs(df, theta, n=20, seed=123):
+    M, K = np.shape(theta)
+    np.random.seed(seed)
+    np.random.shuffle(idx := list(range(M)))
+    df_shuffled = df.loc[idx].reset_index(drop=True)
+    topdocs = []
+    for k in range(K):
+        indices = (-theta[idx, k]).argsort()[:n]
+        topdocs.append(f'Topic {k}:')
+        for i in indices:
+            file = '/'.join(df_shuffled.loc[i, "file_path"].split('/')[-2:])
+            topdocs.append(f'{df_shuffled.loc[i, "w"]} ({file})')
+    return topdocs
+
+def topic_props_over_time_table(time, z, periods, meta=None, variable=None, value=None, relative=True):
     """
     Table with word proportions normalized over time periods.
     Args: periods is an array with periods as rows.
     """
     K = max(z)+1
     X = pd.DataFrame({'time': time, 'z': z})
+
+    if isinstance(meta, pd.DataFrame) and variable and value:
+        X[variable] = meta[variable]
+        X = X.loc[X[variable] == value]
+        X = X.reset_index(drop=True)
+
     df = pd.crosstab(X["time"], X["z"])
     results = pd.DataFrame(np.zeros((len(periods), K), dtype=int))
     for i, row in df.iterrows():
         idx = np.where(periods == i)[0][0]
         for k in range(K):
-            results.loc[idx,k] += row[k]
-    results.index = [str(periods[i,0]) + '-' + str(periods[i,-1]) for i in range(len(periods))]
-    results = results.div(results.sum(axis=1), axis=0)
-    results = np.round(results, 3)
-    return results
+            try:
+                results.loc[idx,k] += row[k]
+            except:
+                pass
+    results.index = [str(periods[i, 0]) + '-' + str(periods[i,-1]) for i in range(len(periods))]
+    results.loc['Total'] = results.sum(axis=0)
+    if relative:
+        results = results.div(results.sum(axis=1), axis=0)
+    return np.round(results, 3)
 
-def lemma_props_by_topic(lemmas, z):
+def lemma_props_by_topic(lemmas, z, relative=True):
     X = pd.DataFrame({'lemmas':lemmas, 'z':z})
-    X = pd.crosstab(X["lemmas"], X["z"], normalize='index')
+    X = pd.crosstab(X["lemmas"], X["z"], normalize='index' if relative else False)
     return np.round(X, 3)
 
 def convergence_plot(loss, color=None, xticks=None):
@@ -167,6 +191,7 @@ def senses_over_time(time, z, color, meta=None, variable=None, value=None, xlim=
     if isinstance(meta, pd.DataFrame) and variable and value:
         X[variable] = meta[variable]
         X = X.loc[X[variable] == value]
+        X = X.reset_index(drop=True)
 
     f = plt.figure()
     gs = f.add_gridspec(2, 2)
@@ -262,7 +287,24 @@ def word_freq_over_time(time, target, color):
 
     return f
 
-def z_sorter(z, theta, phi, Nd=None, Nk=None):
+def lemmas_over_time_by_topic(lemma, year, z, k):
+    """
+    TODO: Probably weight by overall word usage
+    """
+    X = pd.DataFrame({'lemma':lemma, 'year':year, 'z':z})
+    Y = X.loc[X["z"] == k][["lemma", "year"]]
+    Y = pd.crosstab(Y["year"], Y["lemma"])#, normalize='index')
+    Y["year"] = Y.index
+    with sns.axes_style("whitegrid"):
+        for l in set(X["lemma"]):
+            f = sns.lineplot(x=Y['year'], y=Y[l])
+        f.set_title(f'Topic: {k}')
+        f.set(xlabel='Year')
+        f.set(ylabel='Frequency')
+    sns.despine()
+    return f
+
+def z_sorter(z, theta, phi, Nd, Nk):
     """
     Sorts z in descending frequency order for easier comparisons between runs and models.
     """
@@ -273,14 +315,9 @@ def z_sorter(z, theta, phi, Nd=None, Nk=None):
     z = [z_list[z_sorted.index(zi)] for zi in z]
     theta = theta[:,z_sorted]
     phi = phi[z_sorted]
-    results = [z, theta, phi]
-    if isinstance(Nd, np.array):
-        Nd = Nd[:,z_sorted]
-        results.append(Nd)
-    if isinstance(Nk, np.array):
-        Nk = Nk[z_sorted]
-        results.append(Nk)
-    return results
+    Nd = Nd[:,z_sorted]
+    Nk = Nk[z_sorted]
+    return z, theta, phi, Nd, Nk, z_sorted
 
 
 
